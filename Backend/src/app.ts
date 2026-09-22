@@ -17,8 +17,14 @@ app.get("/",async (req:Request,res:Response) => {
 })
 
 import catRouter from "./routes/cat.route.ts"
+import aiRouter from "./routes/ai.routes.ts"
+import aiRecommendRoute from "./routes/aiRecommend.route.ts"
 
 app.use("/api/cat" , catRouter)
+
+app.use("/api/ai" , aiRouter)
+
+app.use("/api/aiRecommend" , aiRecommendRoute)
 
 
 export default app;
