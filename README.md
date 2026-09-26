@@ -28,10 +28,6 @@ side-by-side comparison of the breeds that suit you best.
 - [API reference](#api-reference)
 - [MCP tools](#mcp-tools)
 - [Project structure](#project-structure)
-- [Available scripts](#available-scripts)
-- [Development notes](#development-notes)
-- [Known issues](#known-issues)
-- [Contributing](#contributing)
 - [License](#license)
 
 ---
@@ -68,11 +64,15 @@ one-bedroom flat, or whether a Ragdoll will tolerate a house full of children.
 > | Home / hero | `/` |
 ![alt text](screenshots/image.png)
 > | Breed grid + search | `/browse` |
+![alt text](screenshots/browseimage.png)
 > | Breed detail | `/browse` → click a card |
+![alt text](screenshots/detailsimage.png)
 > | Lifestyle filter | `/recommend` |
+![alt text](screenshots/recommendimage.png)
 > | AI advisor, with markdown answer | `/advisor` |
-> | Mobile nav drawer | any route, narrow viewport |
-> | Dark mode | any route, header toggle |
+![alt text](screenshots/Aiadviserimage.png)
+![alt text](screenshots/Ai2image.png)
+
 
 ---
 
@@ -426,138 +426,8 @@ Kitty-Pedia/
         └── main.tsx              # entry point
 ```
 
-> **`Frontend/AGENT.md`** is the authoritative spec for the frontend: API contract,
-> layering rules, store patterns, Tailwind v4 setup, shadcn conventions, copy
-> guidelines, and a list of mistakes to avoid. It is gitignored, so ask a
-> contributor for a copy if you need it.
 
----
 
-## Available scripts
-
-### `Backend`
-
-| Command | Does |
-| --- | --- |
-| `npm run dev` | Start with nodemon + ts-node, watching for changes |
-
-### `MCP_Server`
-
-| Command | Does |
-| --- | --- |
-| `npm run dev` | Start with nodemon |
-| `npm run build` | Compile TypeScript to `build/` |
-| `npm run start` | Run the compiled server |
-| `npm run inspectorui` | Launch the MCP Inspector against the server |
-
-### `Frontend`
-
-| Command | Does |
-| --- | --- |
-| `npm run dev` | Vite dev server on :5173 |
-| `npm run build` | Typecheck, then build to `dist/` |
-| `npm run preview` | Serve the production build locally |
-| `npm run typecheck` | `tsc -b --noEmit` |
-| `npm run lint` | oxlint |
-| `npx shadcn@latest add <component>` | Add a shadcn/ui component |
-
----
-
-## Development notes
-
-A few things that will save you time.
-
-**The two response envelopes are not a typo.** Normalize them in
-`Frontend/src/api/client.ts` and let components work with unwrapped data only.
-
-**AI calls are slow.** Measured against a local run:
-
-| Endpoint | Latency |
-| --- | --- |
-| `GET /api/cat/` | ~50 ms |
-| `POST /api/cat/recommend` | ~80 ms |
-| `POST /api/ai/ask` | ~6 s |
-| `POST /api/aiRecommend/recommend` | **~110 s** |
-| `POST /api/mcpTest/` | **~111 s** |
-
-The frontend therefore uses **per-route timeouts** (`TIMEOUTS` in `api/client.ts`):
-30 s for database routes, 240 s for AI, 300 s for MCP. Do not collapse these into a
-single value — anything under ~180 s will break the Advisor.
-
-**CORS is enabled for `http://localhost:5173` only.** Change it in
-`Backend/src/app.ts` if you move the frontend's port.
-
-**Every async route handler is wrapped in `asyncHandler`.** It converts a thrown
-error into `{ success: false, message }` with a 5xx status. Without it, an
-unhandled rejection returns Express's default HTML error page.
-
-**`shadcn add` misbehaves on Windows.** It resolves the `@/*` alias as a literal
-directory. The aliases in `components.json` are set to `src/`-relative paths to work
-around it, and new files still emit `import { cn } from "cn"` — which resolves to an
-unrelated npm package rather than your `cn()` helper. Fix it across every component
-after each `add`:
-
-```bash
-sed -i 's|from "cn"|from "@/lib/utils"|g' src/components/ui/*.tsx
-npm run typecheck   # confirm
-```
-
-The stray `cn` package is not in `package.json` and is not imported anywhere, so this
-is a source-only fix.
-
-**Don't add `baseUrl` to `tsconfig.app.json`.** It is deprecated in TypeScript 6 and
-is a hard build error. `paths` alone resolves relative to the tsconfig.
-
-**Never return a fresh object from a Zustand selector.** Zustand 5 compares by
-reference, so it re-renders forever. Select primitives and combine with `useMemo`.
-
----
-
-## Known issues
-
-- **Breed photos are placeholders.** Every `image` in the database currently points
-  at `https://example.com/images/<slug>.jpg`, which returns 404. The frontend ships a
-  colour-derived placeholder that renders in its place, so the app looks correct —
-  but real photos need to be uploaded or linked.
-- **An invalid id returns 500, not 404.** Mongoose throws inside `findById` and
-  `asyncHandler` turns it into a 500. The frontend handles this, but the API should
-  return 404.
-- **No create/update/delete UI.** The API only exposes `POST /api/cat/create`; there
-  is no `PUT` or `DELETE`, so a full admin is not possible yet.
-- **No pagination.** `GET /api/cat/` returns every record with no limit.
-- **`MISTRAL_API_KEY` is unused.** It is in `.env` but no code path reads it.
-- **No automated tests.** Verification so far has been manual, against a running
-  backend.
-- **The Advisor can take two minutes** with no progress indication, and burns real
-  Gemini time on every request. Caching and streaming are the obvious next steps.
-
----
-
-## Contributing
-
-Contributions are welcome.
-
-1. Fork the repository and create a branch: `git checkout -b feature/your-change`
-2. Make your change, keeping the three services consistent — an API change means
-   updating `Frontend/src/api/` and `Frontend/AGENT.md` in the same commit.
-3. Verify before opening a PR:
-
-   ```bash
-   # Frontend
-   cd Frontend && npm run typecheck && npm run lint && npm run build
-
-   # Backend
-   cd Backend && npm run dev   # then smoke-test the endpoints
-   ```
-
-4. Write clear commit messages, and open a PR describing what changed and why.
-
-**Two conventions worth respecting:**
-
-- **User-facing copy is for cat owners, not developers.** No framework names,
-  protocol names, or HTTP details in anything a user reads. See `AGENT.md` §13.
-- **Preserve `isAppartmentFriendly`.** It is misspelled in the database. Fixing it
-  requires a migration.
 
 ---
 
