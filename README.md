@@ -66,7 +66,7 @@ one-bedroom flat, or whether a Ragdoll will tolerate a house full of children.
 > | Screen | Route |
 > | --- | --- |
 > | Home / hero | `/` |
-![alt text](image.png)
+![alt text](screenshots/image.png)
 > | Breed grid + search | `/browse` |
 > | Breed detail | `/browse` → click a card |
 > | Lifestyle filter | `/recommend` |
