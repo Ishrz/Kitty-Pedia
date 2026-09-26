@@ -3,6 +3,18 @@ import axios from "axios"
 
 import type { ApiEnvelope, AppError, Normalized } from "@/types/api"
 
+/**
+ * Base URL for all API calls.
+ *
+ * An empty `VITE_API_URL` is the production value: the Backend serves this bundle
+ * itself, so requests are same-origin and relative paths like "/api/cat/" resolve
+ * against whatever host the page came from. That removes CORS entirely and means
+ * the Render URL never has to be baked into the bundle.
+ *
+ * `??` only substitutes on null/undefined, so an intentionally empty string is
+ * preserved and axios treats it as a relative base. Do not "fix" this back to a
+ * hard-coded URL.
+ */
 export const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000"
 
 /**
@@ -12,12 +24,15 @@ export const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:30
  *   POST /api/cat/recommend           ~80ms
  *   POST /api/ai/ask                  ~6s
  *   POST /api/aiRecommend/recommend   ~110s  (5 breeds, full comparison)
- *   POST /api/mcpTest/                10-30s+ (spawns a subprocess first)
+ *   POST /api/mcpTest/                10-110s (first call also starts a subprocess)
+ *
+ * The AI and MCP ceilings are raised well above those numbers because a free-tier
+ * host may need to cold-start first, which adds a minute before any work begins.
  */
 export const TIMEOUTS = {
   default: 30_000,
-  ai: 240_000,
-  mcp: 300_000,
+  ai: 300_000,
+  mcp: 420_000,
 } as const
 
 /**

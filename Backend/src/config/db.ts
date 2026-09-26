@@ -1,10 +1,15 @@
-import mongoose from "mongoose"
+import mongoose from "mongoose";
+import { MONGO_URI } from "./env.ts";
 
-export const ConnectDB = async () =>{
-    try {
-        const DB = await mongoose.connect(process.env.MONGO_URI!)
-        console.log("Databse is connected....")
-    } catch (error) {
-        console.log("Error in connecting Database ")
-    }
-}
+
+export const ConnectDB = async (): Promise<typeof mongoose> => {
+  await mongoose.connect(MONGO_URI);
+  console.log("[db] connected");
+  return mongoose;
+};
+
+/** Closes the connection during graceful shutdown. */
+export const closeDB = async (): Promise<void> => {
+  await mongoose.connection.close();
+  console.log("[db] connection closed");
+};

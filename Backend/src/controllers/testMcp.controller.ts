@@ -2,27 +2,25 @@ import type { Request, Response } from "express";
 import { getMcpClient } from "../services/testMcp.service.ts";
 import { aiGemini } from "../services/ai.service.ts";
 
-export const testMcpController = async(req:Request, res:Response) =>{
+export const testMcpController = async (
+  req: Request,
+  res: Response,
+) => {
+  const { isKidsFriendly, isAppartmentFriendly } = req.body;
 
-    const {isKidsFriendly, isAppartmentFriendly} = req.body
+  try {
 
-
-    const client = await getMcpClient()
-
-    const tools = await client.listTools()
-
-    // console.log(tools)
-    console.log("calling tool----")
+    const client = await getMcpClient();
 
     const result = await client.callTool({
-        name:"recommend_cats",
-        arguments:{
-            isKidsFriendly,
-            isAppartmentFriendly
-        }
-    })
+      name: "recommend_cats",
+      arguments: {
+        isKidsFriendly,
+        isAppartmentFriendly,
+      },
+    });
 
-    let response =(result as any)?.content?.[0]?.text
+    const response = (result as any)?.content?.[0]?.text;
 
     const prompt = `
 You are a professional feline consultant and cat breeder. Your task is to analyze the available cat data from our database and recommend the absolute best match based on the user's living conditions.
@@ -41,13 +39,20 @@ ${response}
 4. Keep the response clean, friendly, and expert-level.
 `;
 
-    console.log("Calling LLM")
-    const aiResponse= await aiGemini(prompt) 
+    const aiResponse = await aiGemini(prompt);
 
     res.status(200).json({
-        message:"tools call successfully",
-        success:true,
-        data:aiResponse
-    })
+      message: "tools call successfully",
+      success: true,
+      data: aiResponse,
+    });
+  } catch (error) {
+    console.error("[mcpTest] request failed:", error);
 
-}
+    res.status(502).json({
+      message:
+        "We could not reach the breed advisor just now. Please try again in a moment.",
+      success: false,
+    });
+  }
+};

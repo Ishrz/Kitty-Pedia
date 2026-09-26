@@ -1,7 +1,9 @@
 {
   "type": "module",
   "scripts": {
-    "dev": "npx nodemon --exec npx ts-node --skip-project ./src/server.ts"
+    "dev": "npx nodemon --exec npx ts-node --skip-project ./src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit --skip-project --module nodenext --moduleResolution nodenext --target esnext --strict --esModuleInterop --skipLibCheck src/server.ts"
   },
   "dependencies": {
     "@google/genai": "^2.24.0",
@@ -10,7 +12,8 @@
     "dotenv": "^18.0.2",
     "express": "^5.2.1",
     "mongoose": "^9.10.1",
-    "morgan": "^1.12.1"
+    "morgan": "^1.12.1",
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

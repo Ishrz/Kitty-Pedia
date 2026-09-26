@@ -1,0 +1,54 @@
+# Render blueprint for Kitty-Pedia.
+#
+# A single web service runs all three packages:
+#   - Express serves the JSON API and the built React bundle
+#   - the MCP server runs as a child process of the API, compiled ahead of time
+#   - MongoDB Atlas holds the breed data
+#
+
+
+services:
+  - type: web
+    name: kitty-pedia
+    runtime: node
+    plan: free
+    rootDir: .
+    branch: main
+
+    # Installs all three packages, compiles the MCP server, builds the frontend
+    # with a relative API base URL, then copies the bundle into Backend/public
+    # where the API serves it from.
+    buildCommand: >-
+      cd MCP_Server && npm ci && npm run build
+      && cd ../Frontend && npm ci && VITE_API_URL= npm run build
+      && cd .. && mkdir -p Backend/public && cp -r Frontend/dist/. Backend/public/
+      && cd Backend && npm ci
+
+    # Runs from Backend/, which is why the MCP path and public/ path are resolved
+    # from the module location rather than the working directory.
+    startCommand: cd Backend && npm start
+
+    # Dedicated endpoint: "/" serves the frontend, so it cannot be the health check.
+    healthCheckPath: /health
+
+    autoDeploy: true
+
+    envVars:
+      # sync: false means Render prompts for these in the dashboard instead of
+      # reading a committed file. MONGO_URI contains a database password and must
+      # never be committed.
+      - key: MONGO_URI
+        sync: false
+
+      - key: GEMINI_API_KEY
+        sync: false
+
+      # The public origin of this service. In production the frontend is served
+      # from the same origin, so CORS is not actually exercised — this only
+      # matters if the app is later run against a separately hosted frontend.
+      - key: CLIENT_ORIGIN
+        sync: false
+
+      # PORT is assigned by Render; MCP_Server reads it to call back over loopback.
+      - key: NODE_VERSION
+        value: 22.21.0
