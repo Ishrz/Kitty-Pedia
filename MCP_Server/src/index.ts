@@ -1,8 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 import { z } from "zod";
-import { catRecommendTool, getAllCats } from "./tools/recommendCat.tool.ts";
-import { error } from "node:console";
+import { catRecommendTool, getAllCats } from "./tools/recommendCat.tool.js";
 
 
 

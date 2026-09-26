@@ -1,5 +1,3 @@
-import dotenv from "dotenv"
-dotenv.config()
 import { GoogleGenAI } from "@google/genai";
 
 export const aiGemini = async (prompt: string) => {

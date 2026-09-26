@@ -24,6 +24,8 @@ side-by-side comparison of the breeds that suit you best.
 - [Tech stack](#tech-stack)
 - [Prerequisites](#prerequisites)
 - [Quick start](#quick-start)
+- [Deploying](#deploying)
+- [Available scripts](#available-scripts)
 - [Environment variables](#environment-variables)
 - [API reference](#api-reference)
 - [MCP tools](#mcp-tools)
@@ -127,27 +129,27 @@ Two modes, both user-facing as "AI Advisor" and "Advanced AI":
 ## Architecture
 
 ```
-┌─────────────────────────┐
-│   Frontend  :5173       │   React 19 + Vite + Tailwind v4
-│   (Browser)             │   Zustand, React Router, shadcn/ui
-└────────────┬────────────┘
+┌────────────────────────────────────────────┐
+│  Dev:  Frontend :5173   ──►  Backend :3000  │
+│  Prod: one process — Backend serves both    │
+└────────────┬───────────────────────────────┘
              │  HTTP / JSON  (axios)
              ▼
 ┌─────────────────────────┐
-│   Backend  :3000        │   Express 5 + TypeScript
-│                         │   Mongoose → MongoDB
+│   Backend               │   Express 5 + TypeScript
+│                         │   Mongoose → MongoDB Atlas
 │   REST API (9 routes)   │   Google Gemini (AI answers)
-│   Gemini client         │
+│   Gemini client         │   serves ../public (the built SPA)
 └────────────┬────────────┘
              │  POST /api/mcpTest/
-             │  1. spawns an MCP client over stdio
+             │  1. one long-lived MCP client over stdio
              │  2. calls the recommend_cats tool
              ▼
 ┌─────────────────────────┐
 │   MCP_Server  (stdio)   │   @modelcontextprotocol/server
-│                         │
+│                         │   compiled to build/index.js
 │   recommend_cats        │──┐
-│   getting_allCats       │  │  calls back into the Backend
+│   getting_allCats       │  │  POSTs back over loopback
 └─────────────────────────┘  │
              ▲               │
              └───────────────┘
@@ -155,6 +157,15 @@ Two modes, both user-facing as "AI Advisor" and "Advanced AI":
 
 The key point: **the browser only ever talks to the Backend.** The MCP server and
 Gemini are both reached server-side, so no API key is ever exposed to the client.
+
+In development the Vite dev server and the API run as separate processes on
+different ports. **In production they are the same process** — the Backend serves
+the built frontend, so requests are same-origin and CORS is not involved. See
+[Deploying](#deploying).
+
+The MCP server is a **child process of the Backend**, not a separate service,
+because it speaks stdio transport. It is started once and reused, and it reaches
+the API over loopback.
 
 ---
 
@@ -236,9 +247,16 @@ cp Backend/.env.example Backend/.env    # then fill in the values
 cp Frontend/.env.example Frontend/.env  # defaults are fine
 ```
 
-### 3. Seed the database
+### 3. Check the database
 
-The repository ships with 20 breeds. If your database is empty, create them with:
+`Backend/.env` already points at a MongoDB Atlas cluster holding 20 breeds, so
+there is normally nothing to do. Confirm with:
+
+```bash
+curl http://localhost:3000/api/cat/
+```
+
+If your database is empty, create records with:
 
 ```bash
 curl -X POST http://localhost:3000/api/cat/create \
@@ -271,10 +289,18 @@ cd Frontend && npm run dev
 Open **http://localhost:5173**.
 
 > The MCP server does **not** need to be started manually. `POST /api/mcpTest/`
-> spawns it as a child process via `npx tsx ../MCP_Server/src/index.ts`, so the
-> Backend's working directory must be `Backend/`.
+> starts it as a child process on first use, then reuses it. It is launched as
+> `node ../MCP_Server/build/index.js`, so **build it once** before using the
+> Advisor:
 >
-> To work on the MCP server in isolation, use the inspector instead:
+> ```bash
+> cd MCP_Server && npm run build
+> ```
+>
+> The Backend resolves that path from its own module location, so it does not
+> matter which directory you launch the API from.
+>
+> To work on the MCP server in isolation, use the inspector:
 >
 > ```bash
 > cd MCP_Server && npm run inspectorui
@@ -283,9 +309,77 @@ Open **http://localhost:5173**.
 ### 5. Verify
 
 ```bash
-curl http://localhost:3000/
-# {"messsage":"server is running successfully","success":true,"status":200}
+curl http://localhost:3000/health
+# {"message":"server is running successfully","success":true,"status":200}
 ```
+
+---
+
+## Deploying
+
+The project is configured to deploy to **Render** as a **single web service**.
+A `render.yaml` blueprint at the repo root holds the build and start commands.
+
+One service runs everything, because the MCP server speaks stdio transport and
+therefore has to be a child process of the API rather than a service of its own:
+
+```
+Render web service
+├── Express            → serves /api/*, the built SPA, and the health check
+└── MCP server         → compiled to build/index.js, spawned once, reused
+                           └── calls back over http://127.0.0.1:$PORT
+```
+
+**Before your first deploy**, one Atlas setting needs to change: Network Access
+must allow `0.0.0.0/0`, because Render's outbound IPs are dynamic. The cluster
+works from your machine today only because your own IP is allowlisted.
+
+Then: **New → Web Service**, connect the repo, apply the blueprint, and enter
+`MONGO_URI`, `GEMINI_API_KEY` and `CLIENT_ORIGIN` when prompted.
+
+**[→ Full deployment guide](RENDER_DEPLOYMENT.md)** covers the architecture
+rationale, the build command, the verification checklist, and troubleshooting.
+
+### Production notes
+
+- The build sets `VITE_API_URL=` (empty) so the browser calls `/api/…` on the
+  same origin. No CORS in production, and the host is never baked into the bundle.
+- The health endpoint is `/health`, not `/`, because `/` serves the frontend.
+- Advisor responses are cached in the browser for 10 minutes, so revisiting a
+  preference combination is instant instead of another ~110 s wait.
+- Free-tier instances spin down after 15 minutes idle, so the first request after
+  a pause takes roughly a minute to wake up. That is cold start, not an error.
+
+---
+
+## Available scripts
+
+### `Backend`
+
+| Command | Does |
+| --- | --- |
+| `npm run dev` | Start with nodemon + ts-node, watching for changes |
+| `npm start` | Production start — runs `src/server.ts` through `tsx`, no watcher |
+
+### `MCP_Server`
+
+| Command | Does |
+| --- | --- |
+| `npm run dev` | Start with nodemon |
+| `npm run build` | Compile to `build/` — **required before the Advisor works** |
+| `npm run start` | Run the compiled server |
+| `npm run inspectorui` | Launch the MCP Inspector against the server |
+
+### `Frontend`
+
+| Command | Does |
+| --- | --- |
+| `npm run dev` | Vite dev server on :5173 |
+| `npm run build` | Typecheck, then build to `dist/` |
+| `npm run preview` | Serve the production build locally |
+| `npm run typecheck` | `tsc -b --noEmit` |
+| `npm run lint` | oxlint |
+| `npx shadcn@latest add <component>` | Add a shadcn/ui component |
 
 ---
 
@@ -295,10 +389,16 @@ curl http://localhost:3000/
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `PORT` | yes | Port for the API. Must match the URLs the MCP server calls — currently `3000`. |
-| `MONGO_URI` | yes | MongoDB connection string, e.g. `mongodb://127.0.0.1:27017/kitty_pedia` |
+| `PORT` | no | Port for the API. Defaults to `3000`. The MCP server reads it to call back. |
+| `MONGO_URI` | yes | MongoDB connection string, e.g. `mongodb+srv://…@cluster0.mongodb.net/kitty_pedia` |
 | `GEMINI_API_KEY` | yes | Google Gemini API key. Required by all AI endpoints. |
 | `MISTRAL_API_KEY` | no | Present in `.env` but currently unused by any code path. |
+| `CLIENT_ORIGIN` | no | Comma-separated CORS allowlist. Defaults to `http://localhost:5173`. Only relevant in development. |
+| `API_BASE_URL` | no | Base URL the MCP server calls back on. Defaults to `http://127.0.0.1:$PORT`. |
+| `SERVE_SPA` | no | Set to `false` to make `/` return JSON instead of the frontend. |
+
+Missing `MONGO_URI` or `GEMINI_API_KEY` fails at startup with a clear message
+rather than surfacing later as a confusing runtime error.
 
 > `.env` is gitignored and must never be committed. Only `VITE_`-prefixed variables
 > reach the browser, so the Gemini key stays server-side regardless.
@@ -307,7 +407,7 @@ curl http://localhost:3000/
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
-| `VITE_API_URL` | no | `http://localhost:3000` | Base URL of the Backend. |
+| `VITE_API_URL` | no | `http://localhost:3000` | Base URL of the Backend. **Set this to empty in production** so requests are same-origin. |
 
 > If you change the frontend's port, update the CORS origin in
 > `Backend/src/app.ts` to match, or browser requests will be blocked.
@@ -331,7 +431,7 @@ MCP routes but **absent** from the cat routes.
 
 | Method | Endpoint | Body / Query | `data` | Notes |
 | --- | --- | --- | --- | --- |
-| `GET` | `/` | — | — | Health check. Note the typo in `messsage`. |
+| `GET` | `/health` | — | — | Health check. Used by the host platform. |
 | `POST` | `/api/cat/create` | cat object | `Cat` | |
 | `GET` | `/api/cat/` | — | `Cat[]` | |
 | `GET` | `/api/cat/search?q=` | `q: string` | `Cat[]` | Regex over **name and breed only** |
