@@ -61,11 +61,12 @@ one-bedroom flat, or whether a Ragdoll will tolerate a house full of children.
 
 ## Screenshots
 
-> **TODO** — drop screenshots here once captured. Suggested set:
+
 >
 > | Screen | Route |
 > | --- | --- |
 > | Home / hero | `/` |
+![alt text](image.png)
 > | Breed grid + search | `/browse` |
 > | Breed detail | `/browse` → click a card |
 > | Lifestyle filter | `/recommend` |
