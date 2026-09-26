@@ -1,9 +1,11 @@
 import express, { type Request, type Response } from "express";
 import morgan from "morgan"
+import cors from "cors"
 const app = express()
 
 app.use(express.json())
 app.use(morgan("dev"))
+app.use(cors({ origin: "http://localhost:5174" }))
 
 //health check
 app.get("/",async (req:Request,res:Response) => {
